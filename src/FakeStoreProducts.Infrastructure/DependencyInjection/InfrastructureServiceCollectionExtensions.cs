@@ -1,6 +1,7 @@
 ﻿using FakeStoreProducts.Infrastructure.ApiClient;
 using FakeStoreProducts.Infrastructure.ApiClient.Options;
 using FakeStoreProducts.Infrastructure.Services;
+using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
@@ -36,6 +37,29 @@ public static class InfrastructureServiceCollectionExtensions
 
         // Registra o cliente da API
         services.AddScoped<IFakeStoreApiClient, FakeStoreApiClient>();
+
+        // Configurar MassTransit com RabbitMQ para a API (apenas para publicação)
+        services.AddMassTransit(config =>
+        {
+            config.UsingRabbitMq((context, cfg) =>
+            {
+                // Configurar conexão com RabbitMQ
+                cfg.Host(configuration["RabbitMQ:Host"] ?? "localhost", "/", h =>
+                {
+                    h.Username(configuration["RabbitMQ:Username"] ?? "guest");
+                    h.Password(configuration["RabbitMQ:Password"] ?? "guest");
+                });
+
+                // Configurar retry policy
+                cfg.UseMessageRetry(r =>
+                {
+                    r.Interval(3, TimeSpan.FromSeconds(5));
+                });
+            });
+        });
+
+        // Registrar o serviço de mensageria
+        services.AddScoped<IMessageBusService, MassTransitMessageBusService>();
 
         return services;
     }
